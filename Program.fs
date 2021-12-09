@@ -2,12 +2,17 @@
 
 open Inferrer
 
+let numCores = 12
+
 [<EntryPoint>]
 let main argv =
   argv 
-  |> Array.Parallel.iter (fun arg -> 
-      fprintfn stderr "Analyzing %s" arg 
-      let compilerType = inferCompiler arg 
-      printfn "%s: %A" arg compilerType
+  |> Array.splitInto numCores
+  |> Array.iter (fun args ->
+    args |> Array.Parallel.iter (fun binPath -> 
+      fprintfn stderr "Analyzing %s" binPath 
+      let compilerType = inferCompiler binPath 
+      printfn "%s: %A" binPath compilerType
+    )
   )
   0
