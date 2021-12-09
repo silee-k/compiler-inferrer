@@ -1,13 +1,13 @@
-﻿module Program
+module Program
 
 open Inferrer
 
-let numCores = 12
+let numCores = System.Environment.ProcessorCount - 2
 
 [<EntryPoint>]
 let main argv =
   argv 
-  |> Array.splitInto numCores
+  |> Seq.chunkBySize numCores |> Seq.toArray
   |> Array.iter (fun args ->
     args |> Array.Parallel.iter (fun binPath -> 
       fprintfn stderr "Analyzing %s" binPath 
