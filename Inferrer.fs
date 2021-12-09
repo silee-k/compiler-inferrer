@@ -161,15 +161,20 @@ let inferCompiler (binPath: string) =
       // fprintfn stderr "\n" 
       matched
     ) 
-  let result = 
+  let scores = 
     compilerTypes 
     |> Array.map (fun compilerType ->
       let matches = matchPushOrder compilerType
       let numMatches = matches |> Seq.sumBy System.Convert.ToInt32
       numMatches
     ) 
-  fprintfn stderr "Score: %A" result
-  let maxScore = Array.max result 
-  let inferredCompiler = 
-    (result |> Array.findIndex maxScore.Equals, compilerTypes) ||> Array.item 
-  inferredCompiler
+
+  let probabilities = 
+    scores
+    |> Array.mapi (fun i matches -> float matches / float funcPushInfos.Length)
+  
+  let result = 
+    compilerTypes
+    |> Array.mapi (fun i compiler -> (compiler, scores[i], probabilities[i]))
+  let sortedResult = result |> Array.sortByDescending (fun (_, s, _) -> s)
+  sortedResult

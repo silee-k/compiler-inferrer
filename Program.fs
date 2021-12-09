@@ -11,8 +11,11 @@ let main argv =
   |> Array.iter (fun args ->
     args |> Array.Parallel.iter (fun binPath -> 
       fprintfn stderr "Analyzing %s" binPath 
-      let compilerType = inferCompiler binPath 
-      printfn "%s: %A" binPath compilerType
+      let result = inferCompiler binPath 
+      let bestFitCompiler, _, _ = result[0]
+      let rank = result |> Array.map (fun (c, _, _) -> c)
+      printfn "%s: %A, rank : %A, probabilities: %A" binPath bestFitCompiler rank
+       (result |> Array.fold (fun a (_, _, x) -> a @ [sprintf "%.3f" x]) [])
     )
   )
   0
