@@ -44,9 +44,8 @@ type Result =
 let getRegisterType reg =
   match Register.extendRegister64 reg with
   | Register.RAX | Register.RCX | Register.RDX | Register.RBX  
-  | Register.RSI | Register.RDI
     -> RegType.General
-  // | Register.RSI | Register.RDI -> RegType.Index
+  | Register.RSI | Register.RDI -> RegType.Index
   | Register.RSP | Register.RBP -> RegType.Stack
   | Register.R8 | Register.R9 | Register.R10 | Register.R11 
   | Register.R12 | Register.R13 | Register.R14 | Register.R15 
@@ -131,15 +130,17 @@ let inferCompiler (binPath: string) =
 
   let funcPushInfos = funcs |> Array.Parallel.map getPushInfo |> Array.choose id
 
-  let gccPushOrder = [| RegType.Extra; RegType.Stack; RegType.General |]
-  let clangPushOrder = [| RegType.Stack; RegType.Extra; RegType.General |]
+  let gccPushOrder = [| RegType.Extra; RegType.Stack; RegType.Index;  RegType.General |]
+  let clangPushOrder = [| RegType.Stack; RegType.Extra; RegType.General; RegType.Index |]
   let iccPushOrder = [| RegType.Extra; RegType.General; RegType.Stack |]
   let orders = [ gccPushOrder; clangPushOrder; iccPushOrder ];
 
   let comparer order i1 i2 = 
-    let rank1 = order |> Array.findIndex i1.Type.Equals
-    let rank2 = order |> Array.findIndex i2.Type.Equals
-    compare rank1 rank2
+    let rank1 = order |> Array.tryFindIndex i1.Type.Equals
+    let rank2 = order |> Array.tryFindIndex i2.Type.Equals
+    match rank1, rank2 with
+    | Some rank1, Some rank2 -> compare rank1 rank2
+    | None, _ | _, None | None, None -> 0
 
   let matchPushOrder compilerType = 
     funcPushInfos 
@@ -167,7 +168,7 @@ let inferCompiler (binPath: string) =
       let numMatches = matches |> Seq.sumBy System.Convert.ToInt32
       numMatches
     ) 
-  fprintfn stderr "Result: %A" result
+  fprintfn stderr "Score: %A" result
   let maxScore = Array.max result 
   let inferredCompiler = 
     (result |> Array.findIndex maxScore.Equals, compilerTypes) ||> Array.item 
