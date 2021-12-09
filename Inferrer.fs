@@ -8,6 +8,7 @@ open B2R2.FrontEnd.BinInterface
 open B2R2.MiddleEnd.BinEssence
 open B2R2.MiddleEnd.BinGraph
 open B2R2.MiddleEnd.ControlFlowGraph
+open B2R2.MiddleEnd.ControlFlowAnalysis
 
 type RegType =
   | General
@@ -19,7 +20,7 @@ type RegType =
 type OrderType = 
   | Asc
   | Desc
-  | None
+  | Unknown
 
 type PushInfo = 
   { 
@@ -58,14 +59,15 @@ let inferCompiler (binPath: string) =
   let hdl = BinHandle.Init(ISA.DefaultISA, binPath)
   let ess = BinEssence.init hdl [] [] []
   let funcs = ess.CodeManager.FunctionMaintainer.RegularFunctions
-  let funcPushInfos = 
-    funcs |> Seq.fold (fun accPushInfos func ->
-      let cfg = func.IRCFG
-      let entryVertex = 
-        DiGraph.getUnreachables cfg 
-        |> List.find (fun v -> v.VData.PPoint.Address = func.Entry)
+  fprintfn stderr "MiddleEnd Analyzed: %s" binPath
+  let getPushInfo (func: RegularFunction) =
+    let unreachables = DiGraph.getUnreachables func.IRCFG 
+    let entryVertex = 
+      unreachables |> List.tryFind (fun v -> v.VData.PPoint.Address = func.Entry)
+    match entryVertex with
+    | None -> None
+    | Some entryVertex -> 
       let insInfos = entryVertex.VData.InsInfos
-      
       let pushes = 
         insInfos |> Array.fold (fun pushes info -> 
           let mnemonic = (info.Instruction.Decompose (false) |> Array.head).AsmWordValue
@@ -87,12 +89,14 @@ let inferCompiler (binPath: string) =
         ) [] |> List.rev
 
       let regs = regIds |> List.map (fun id -> Register.ofRegID id) 
+
       let pushInfos = 
         regs |> Array.ofList |> Array.fold (fun pushInfos reg ->
-          let info = { Reg = reg; Type = getRegisterType reg; Order = None}
+          let info = { Reg = reg; Type = getRegisterType reg; Order = Unknown}
           if info.Type <> RegType.Others then  info :: pushInfos
           else pushInfos
         ) [] |> List.rev |> List.toArray
+
       let pushInfos = 
         pushInfos |> Array.foldi (fun infos i info ->
           let info = 
@@ -108,8 +112,9 @@ let inferCompiler (binPath: string) =
                   // the order of last in the same type is previous one
                   { info with Order = (List.head infos).Order }
                 else info
-            else // the order of last is previous one
-              if i > 0 then { info with Order = (List.head infos).Order }
+            else // the order of last in the same type is previous one
+              if i > 0 && info.Type = pushInfos[i - 1].Type then
+                { info with Order = (List.head infos).Order }
               else info
           info :: infos
         ) [] |> fst |> List.rev
@@ -121,10 +126,10 @@ let inferCompiler (binPath: string) =
           if exist then acc else info :: acc
         ) [] |> List.rev 
 
-      if uniquePushInfos.Length > 1 then
-        (func.Entry, uniquePushInfos) :: accPushInfos
-      else accPushInfos
-    ) [] |> List.rev
+      if uniquePushInfos.Length > 1 then Some (func.Entry, uniquePushInfos)
+      else None
+
+  let funcPushInfos = funcs |> Array.Parallel.map getPushInfo |> Array.choose id
 
   let gccPushOrder = [| RegType.Extra; RegType.Stack; RegType.General |]
   let clangPushOrder = [| RegType.Stack; RegType.Extra; RegType.General |]
@@ -138,31 +143,31 @@ let inferCompiler (binPath: string) =
 
   let matchPushOrder compilerType = 
     funcPushInfos 
-    |> List.map (fun (funcAddr, pushInfos) ->
+    |> Array.map (fun (funcAddr, pushInfos) ->
       let compilerPushOrder = orders[int compilerType]
       let sortedPushInfos = 
         pushInfos |> List.sortWith (comparer compilerPushOrder)
       let matched = pushInfos = sortedPushInfos
-
-      // printf "func %x: " funcAddr
-      // printf "%b -> " matched
+      // fprintfn stderr "func %x: " funcAddr
+      // fprintfn stderr "%b -> " matched
       // pushInfos |> List.iter (fun info ->
-      //   printf "%A:%A " info.Type info.Order
+      //   fprintfn stderr "%A:%A " info.Type info.Order
       // )
-      // printf " VS "
+      // fprintfn stderr " VS "
       // sortedPushInfos |> List.iter (fun info ->
-      //   printf "%A:%A " info.Type info.Order
+      //   fprintfn stderr "%A:%A " info.Type info.Order
       // )
-      // printf "\n" 
+      // fprintfn stderr "\n" 
       matched
     ) 
   let result = 
     compilerTypes 
     |> Array.map (fun compilerType ->
       let matches = matchPushOrder compilerType
-      let numMatches = matches |> List.sumBy System.Convert.ToInt32
+      let numMatches = matches |> Seq.sumBy System.Convert.ToInt32
       numMatches
     ) 
+  fprintfn stderr "Result: %A" result
   let maxScore = Array.max result 
   let inferredCompiler = 
     (result |> Array.findIndex maxScore.Equals, compilerTypes) ||> Array.item 

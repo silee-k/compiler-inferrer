@@ -5,13 +5,9 @@ open Inferrer
 [<EntryPoint>]
 let main argv =
   argv 
-  |> Seq.map (fun arg -> 
-    async {
+  |> Array.Parallel.iter (fun arg -> 
+      fprintfn stderr "Analyzing %s" arg 
       let compilerType = inferCompiler arg 
       printfn "%s: %A" arg compilerType
-    }
-  ) 
-  |> Async.Parallel
-  |> Async.Ignore
-  |> Async.RunSynchronously
+  )
   0
