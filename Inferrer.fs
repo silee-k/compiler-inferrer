@@ -128,7 +128,7 @@ let inferCompiler (binPath: string) =
       if uniquePushInfos.Length > 1 then Some (func.Entry, uniquePushInfos)
       else None
 
-  let funcPushInfos = funcs |> Array.Parallel.map getPushInfo |> Array.choose id
+  let funcPushInfos = funcs |> Array.map getPushInfo |> Array.choose id
 
   let gccPushOrder = [| RegType.Extra; RegType.Stack; RegType.Index;  RegType.General |]
   let clangPushOrder = [| RegType.Stack; RegType.Extra; RegType.General; RegType.Index |]
