@@ -55,10 +55,15 @@ let getRegisterType reg =
 let compilerTypes = [| CompilerType.Gcc; CompilerType.Clang; CompilerType.Icc |]
   
 let inferCompiler (binPath: string) =
+  let stopwatch = System.Diagnostics.Stopwatch();
+  stopwatch.Start();
   let hdl = BinHandle.Init(ISA.DefaultISA, binPath)
   let ess = BinEssence.init hdl [] [] []
   let funcs = ess.CodeManager.FunctionMaintainer.RegularFunctions
+  stopwatch.Stop();
+  printfn "B2R2 Time: %d" stopwatch.ElapsedMilliseconds
   fprintfn stderr "MiddleEnd Analyzed: %s" binPath
+  stopwatch.Restart();
   let getPushInfo (func: RegularFunction) =
     let unreachables = DiGraph.getUnreachables func.IRCFG 
     let entryVertex = 
@@ -72,11 +77,11 @@ let inferCompiler (binPath: string) =
           let decomposed = info.Instruction.Decompose (false)
           let mnemonic = decomposed[0].AsmWordValue
           let op1 = Array.tryItem 1 decomposed
-          if not breaked && mnemonic = "push" then info :: pushes, breaked
-          else 
-            if mnemonic = "sub" && (Option.get op1).AsmWordValue.EndsWith("sp") then 
-              pushes, true
-            else pushes, breaked
+          match mnemonic with
+          | "push" when not breaked -> info :: pushes, breaked
+          | "sub" when (Option.get op1).AsmWordValue.EndsWith("sp") -> 
+            pushes, true
+          | _ -> pushes, breaked
         ) ([], false) |> fst |> List.rev
 
       let regIds = 
@@ -181,4 +186,6 @@ let inferCompiler (binPath: string) =
     compilerTypes
     |> Array.mapi (fun i compiler -> (compiler, scores[i], probabilities[i]))
   let sortedResult = result |> Array.sortByDescending (fun (_, s, _) -> s)
+  stopwatch.Stop();
+  printfn "Inferring Time: %d" stopwatch.ElapsedMilliseconds
   sortedResult
