@@ -68,11 +68,16 @@ let inferCompiler (binPath: string) =
     | Some entryVertex -> 
       let insInfos = entryVertex.VData.InsInfos
       let pushes = 
-        insInfos |> Array.fold (fun pushes info -> 
-          let mnemonic = (info.Instruction.Decompose (false) |> Array.head).AsmWordValue
-          if mnemonic = "push" then info :: pushes
-          else pushes
-        ) [] |> List.rev
+        insInfos |> Array.fold (fun (pushes, breaked) info -> 
+          let decomposed = info.Instruction.Decompose (false)
+          let mnemonic = decomposed[0].AsmWordValue
+          let op1 = Array.tryItem 1 decomposed
+          if not breaked && mnemonic = "push" then info :: pushes, breaked
+          else 
+            if mnemonic = "sub" && (Option.get op1).AsmWordValue.EndsWith("sp") then 
+              pushes, true
+            else pushes, breaked
+        ) ([], false) |> fst |> List.rev
 
       let regIds = 
         pushes |> List.fold (fun regIds push -> 
@@ -80,8 +85,7 @@ let inferCompiler (binPath: string) =
             match stmt.S with
             | Put (_, e2) -> 
               match e2.E with
-              | Var (_, id, _, _ ) -> 
-              id :: regIds
+              | Var (_, id, _, _ ) -> id :: regIds
               | _ -> regIds
             | _ -> regIds
           ) regIds
