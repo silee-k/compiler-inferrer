@@ -2,7 +2,7 @@ module Program
 
 open Inferrer
 
-let numCores = System.Environment.ProcessorCount - 2
+let numCores = System.Environment.ProcessorCount - 2 |> max 1
 
 [<EntryPoint>]
 let main argv =
