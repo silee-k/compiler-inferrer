@@ -52,6 +52,15 @@ let getRegisterType reg =
     -> RegType.Extra 
   | _ -> RegType.Others
 
+let isCalleeSavedRegisterType reg =
+  match Register.extendRegister64 reg with
+  | Register.RBX  
+  | Register.RSI | Register.RDI
+  | Register.RSP | Register.RBP
+  | Register.R12 | Register.R13 | Register.R14 | Register.R15 
+    -> true
+  | _ -> false
+
 let compilerTypes = [| CompilerType.Gcc; CompilerType.Clang; CompilerType.Icc |]
   
 let inferCompiler (binPath: string) =
@@ -101,7 +110,7 @@ let inferCompiler (binPath: string) =
       let pushInfos = 
         regs |> Array.ofList |> Array.fold (fun pushInfos reg ->
           let info = { Reg = reg; Type = getRegisterType reg; Order = Unknown}
-          if info.Type <> RegType.Others then  info :: pushInfos
+          if info.Reg |> isCalleeSavedRegisterType then info :: pushInfos
           else pushInfos
         ) [] |> List.rev |> List.toArray
 
@@ -141,7 +150,7 @@ let inferCompiler (binPath: string) =
 
   let gccPushOrder = [| RegType.Extra; RegType.Stack; RegType.Index;  RegType.General |]
   let clangPushOrder = [| RegType.Stack; RegType.Extra; RegType.General; RegType.Index |]
-  let iccPushOrder = [| RegType.Extra; RegType.General; RegType.Stack |]
+  let iccPushOrder = [| RegType.Extra; RegType.General; RegType.Stack; RegType.Index |]
   let orders = [ gccPushOrder; clangPushOrder; iccPushOrder ];
 
   let comparer order i1 i2 = 
@@ -158,16 +167,16 @@ let inferCompiler (binPath: string) =
       let sortedPushInfos = 
         pushInfos |> List.sortWith (comparer compilerPushOrder)
       let matched = pushInfos = sortedPushInfos
-      // fprintfn stderr "func %x: " funcAddr
-      // fprintfn stderr "%b -> " matched
-      // pushInfos |> List.iter (fun info ->
-      //   fprintfn stderr "%A:%A " info.Type info.Order
-      // )
-      // fprintfn stderr " VS "
-      // sortedPushInfos |> List.iter (fun info ->
-      //   fprintfn stderr "%A:%A " info.Type info.Order
-      // )
-      // fprintfn stderr "\n" 
+      fprintfn stderr "func %x: " funcAddr
+      fprintfn stderr "%b -> " matched
+      pushInfos |> List.iter (fun info ->
+        fprintfn stderr "%A:%A " info.Type info.Order
+      )
+      fprintfn stderr " VS "
+      sortedPushInfos |> List.iter (fun info ->
+        fprintfn stderr "%A:%A " info.Type info.Order
+      )
+      fprintfn stderr "\n" 
       matched
     ) 
   let scores = 
