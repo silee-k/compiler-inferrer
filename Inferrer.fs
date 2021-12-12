@@ -167,16 +167,16 @@ let inferCompiler (binPath: string) =
       let sortedPushInfos = 
         pushInfos |> List.sortWith (comparer compilerPushOrder)
       let matched = pushInfos = sortedPushInfos
-      fprintfn stderr "func %x: " funcAddr
-      fprintfn stderr "%b -> " matched
-      pushInfos |> List.iter (fun info ->
-        fprintfn stderr "%A:%A " info.Type info.Order
-      )
-      fprintfn stderr " VS "
-      sortedPushInfos |> List.iter (fun info ->
-        fprintfn stderr "%A:%A " info.Type info.Order
-      )
-      fprintfn stderr "\n" 
+      // fprintfn stderr "func %x: " funcAddr
+      // fprintfn stderr "%b -> " matched
+      // pushInfos |> List.iter (fun info ->
+      //   fprintfn stderr "%A:%A " info.Type info.Order
+      // )
+      // fprintfn stderr " VS "
+      // sortedPushInfos |> List.iter (fun info ->
+      //   fprintfn stderr "%A:%A " info.Type info.Order
+      // )
+      // fprintfn stderr "\n" 
       matched
     ) 
   let scores = 
@@ -196,5 +196,6 @@ let inferCompiler (binPath: string) =
     |> Array.mapi (fun i compiler -> (compiler, scores[i], probabilities[i]))
   let sortedResult = result |> Array.sortByDescending (fun (_, s, _) -> s)
   stopwatch.Stop();
+  printfn "Scores: %A" scores
   printfn "Inferring Time: %d" stopwatch.ElapsedMilliseconds
   sortedResult
